@@ -1,0 +1,13 @@
+# the xppo config will override default ppo_trainer.yaml
+
+hydra:
+  searchpath:
+    - file://verl/verl/trainer/config
+
+defaults:
+  - ppo_trainer
+  - _self_
+
+actor_rollout_ref:
+  actor:
+    _target_: xft.workers.config.FSDPActorConfig
