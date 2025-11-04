@@ -441,7 +441,9 @@ class DataParallelPPOActor(BasePPOActor):
                     shift_labels = shift_labels.view(-1).to(shift_logits.device)
                     hint_mask = model_inputs["hint_mask"][:, :-1]  # (bsz, prompt_length-1)
 
-                    sft_loss = F.cross_entropy(shift_logits, shift_labels, reduction="none")
+                    shift_logits_clamp = torch.clamp(shift_logits, min=-100, max=100)
+
+                    sft_loss = F.cross_entropy(shift_logits_clamp, shift_labels, reduction="none")
                     sft_loss = verl_F.masked_mean(sft_loss, hint_mask.reshape(-1))
 
                     # for fully_async_policy recipe
