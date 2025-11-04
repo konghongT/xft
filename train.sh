@@ -5,7 +5,7 @@ export SEED=7
 
 data="math"
 model="Qwen/Qwen2.5-3B"
-alg="uft"
+alg="uft2"
 
 N_GPUS=8
 #CUDA_VISIBLE_DEVICES=
@@ -17,9 +17,9 @@ VLLM_ATTENTION_BACKEND="XFORMERS"
 LOWER_PROB=0.05
 UPPER_PROB=0.95
 
-DATA_DIR="./data/${data}"
+DATA_DIR="/root/UFT/UFT/data/${data}"
 TOTAL_TRAINING_STEPS=500
-TOTAL_TRAINING_STEPS_HINT=300
+TOTAL_TRAINING_STEPS_HINT=50
 
 PPO_MINIBATCH=64
 PPO_MICROBATCH=4
@@ -44,6 +44,8 @@ PYTHONPATH=verl:. python -m xft.trainer.main_ppo \
     data.max_response_length=$MAX_RESPONSE_LENGTH \
     data.filter_overlong_prompts=True \
     data.truncation='error' \
+    custom_reward_function.path=xft/utils/reward_score/math_reward.py \
+    custom_reward_function.name=compute_score \
     actor_rollout_ref.model.path=$BASE_MODEL \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=False \
@@ -70,7 +72,7 @@ PYTHONPATH=verl:. python -m xft.trainer.main_ppo \
     algorithm.use_kl_in_reward=False \
     trainer.critic_warmup=0 \
     +trainer.seed=$SEED \
-    trainer.logger='["console"]' \
+    trainer.logger='["console","swanlab"]' \
     trainer.val_before_train=True \
     trainer.default_hdfs_dir=null \
     trainer.project_name=UFT \
@@ -79,7 +81,7 @@ PYTHONPATH=verl:. python -m xft.trainer.main_ppo \
     trainer.nnodes=1 \
     trainer.save_freq=100 \
     trainer.test_freq=25 \
-    +data.trainer.total_training_steps=$TOTAL_TRAINING_STEPS \
+    trainer.total_training_steps=$TOTAL_TRAINING_STEPS \
     +data.trainer.total_training_steps_hint=$TOTAL_TRAINING_STEPS_HINT \
     +data.trainer.uniform_sampling=$UNIFORM_SAMPLING \
     +data.trainer.stage=$STAGE \
