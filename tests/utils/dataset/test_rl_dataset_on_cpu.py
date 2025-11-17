@@ -20,7 +20,7 @@ from torch.utils.data import DataLoader
 
 def get_gsm8k_data():
     # prepare test dataset
-    local_folder = os.path.expanduser("/root/UFT/UFT/data/math")
+    local_folder = os.path.expanduser("~/data/math")
     local_path = os.path.join(local_folder, "train.parquet")
     os.makedirs(local_folder, exist_ok=True)
     return local_path
@@ -65,5 +65,8 @@ def test_rl_dataset():
     output = tokenizer.batch_decode([data])[0]
     print(f"type: type{output}")
     print(f"\n\noutput: {output}")
+    torch.set_printoptions(threshold=torch.inf)
+    for key, val in dataset[0].items():
+        print(f"dataset: {key}={val}")
 
 

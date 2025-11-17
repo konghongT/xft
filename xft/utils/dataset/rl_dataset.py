@@ -118,6 +118,7 @@ class RLHFDataset(Dataset):
         self.num_workers = config.get("filter_overlong_prompts_workers", max(1, os.cpu_count() // 4))
         self.num_workers = min(self.num_workers, os.cpu_count())
         self.use_shm = config.get("use_shm", False)
+        self.split_prompt = config.get("split_prompt", True)
         self.is_eval = is_eval
         self.timestep = 1 # start from 1
         self.chat_template_func = config.get("chat_template_func", None)
@@ -148,6 +149,30 @@ class RLHFDataset(Dataset):
 
         total = len(self.dataframe)
         print(f"dataset len: {len(self.dataframe)}")
+
+        if self.split_prompt:
+            user_key = "User: "
+            assistant_key = "Assistant: "
+
+            def _split_prompt(batch):
+                chat = batch[self.prompt_key]
+                if len(chat) == 1 and chat[0]["role"] == "user":
+                    system, assistant, content = None, None, chat[0]["content"]
+                    k = content.find(user_key)
+                    if k != -1:
+                        system, content = content[:k], content[k + len(user_key):]
+                    k = content.rfind(assistant_key)
+                    if k != -1:
+                        content, assistant = content[:k], content[k + len(assistant_key):]
+                    chat[0]["content"] = content
+                    # if assistant:
+                    #     chat = np.concatenate((chat, [{"role": "assistant", "content": assistant}]))
+                    if system:
+                        chat = np.concatenate(([{"role": "system", "content": system}], chat))
+                batch[self.prompt_key] = chat
+                return batch
+
+            self.dataframe = self.dataframe.map(_split_prompt)
 
         if self.max_samples > 0 and self.max_samples < total:
             if self.shuffle:
@@ -406,9 +431,9 @@ class RLHFDataset(Dataset):
         if hint_length > 0:
             hint_left = hint_length
             if self.truncation == "right":
-                hint_left = input_ids.shape[-1] + hint_length - input_length
+                hint_left = input_ids.shape[-1] - input_length
             if hint_left > 0:
-                hint_mask[:, -hint_left:-1] = 1
+                hint_mask[:, -hint_left - 1:-1] = 1
 
 
         if self.processor is not None and "Qwen2VLImageProcessor" in self.processor.image_processor.__class__.__name__:
@@ -450,8 +475,8 @@ class RLHFDataset(Dataset):
         row_dict["input_ids"] = input_ids[0]
         row_dict["attention_mask"] = attention_mask[0]
         row_dict["position_ids"] = position_ids[0]
-        row_dict['hint_mask'] = hint_mask[0]
-        row_dict['hint_slice_prop'] = hint_slice_prop
+        row_dict["hint_mask"] = hint_mask[0]
+        row_dict["hint_slice_prop"] = hint_slice_prop
 
         raw_prompt_ids = self.tokenizer.encode(raw_prompt, add_special_tokens=False)
         if len(raw_prompt_ids) > self.max_prompt_length:
@@ -466,18 +491,21 @@ class RLHFDataset(Dataset):
             elif self.truncation == "error":
                 raise RuntimeError(f"Prompt length {len(raw_prompt_ids)} is longer than {self.max_prompt_length}.")
 
-        row_dict["raw_prompt_ids"] = raw_prompt_ids
-        # encode prompts without chat template
-        if self.return_raw_chat:
-            row_dict["raw_prompt"] = messages
+        # row_dict["raw_prompt_ids"] = raw_prompt_ids
+        # # encode prompts without chat template
+        # if self.return_raw_chat:
+        #     row_dict["raw_prompt"] = messages
 
-        # get prompts with chat template
-        if self.return_full_prompt:
-            row_dict["full_prompts"] = raw_prompt  # array of strings
+        # # get prompts with chat template
+        # if self.return_full_prompt:
+        #     row_dict["full_prompts"] = raw_prompt  # array of strings
 
         # add index for each prompt
         if "extra_info" not in row_dict or row_dict["extra_info"] is None:
             row_dict["extra_info"] = dict()
+        row_dict["extra_info"]["prompts"] = self.tokenizer.decode(
+            row_dict["input_ids"][-row_dict["attention_mask"].sum():], skip_special_tokens=False
+        )
         index = row_dict.get("extra_info", {}).get("index", 0)
         tools_kwargs = row_dict.get("extra_info", {}).get("tools_kwargs", {})
         interaction_kwargs = row_dict.get("extra_info", {}).get("interaction_kwargs", {})

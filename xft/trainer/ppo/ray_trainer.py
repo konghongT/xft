@@ -1314,6 +1314,14 @@ class RayPPOTrainer:
                 )
                 # collect metrics
                 metrics.update(compute_data_metrics(batch=batch, use_critic=self.use_critic))
+                if "hint_slice_prop" in batch.batch:
+                    metrics.update(
+                        {
+                             "hint_slice_prop/mean": np.mean(batch.batch["hint_slice_prop"]),
+                             "hint_slice_prop/max": np.max(batch.batch["hint_slice_prop"]),
+                             "hint_slice_prop/min": np.min(batch.batch["hint_slice_prop"]),
+                        }
+                    )
                 metrics.update(compute_timing_metrics(batch=batch, timing_raw=timing_raw))
                 # TODO: implement actual tflpo and theoretical tflpo
                 n_gpus = self.resource_pool_manager.get_n_gpus()

@@ -434,7 +434,7 @@ class DataParallelPPOActor(BasePPOActor):
                         model_inputs, temperature=temperature, calculate_entropy=calculate_entropy, return_prompt_logits=True
                     )
 
-                    response_length = model_inputs["responses"].size(-1)
+                    response_length = model_inputs["responses"].size(1)
                     shift_logits = prompt_logits[:, :-1, :].contiguous()
                     shift_labels = model_inputs["input_ids"][:, 1:-response_length].contiguous()
                     shift_logits = shift_logits.view(-1, self.actor_module.config.vocab_size)

@@ -13,16 +13,40 @@
 # limitations under the License.
 # Adapted from https://github.com/EleutherAI/lm-evaluation-harness/blob/main/lm_eval/tasks/hendrycks_math/utils.py
 
+import random
 import re
 
 def compute_score(data_source, solution_str, ground_truth, **kwargs) -> float:
     retval = 0.0
+
+    extra_info = kwargs["extra_info"]
+    if "prompts" in extra_info:
+        solution_str = extra_info["prompts"] + solution_str
+
+    do_print = random.randint(1, 64) == 1
+    if do_print:
+        print(f"--------------------------------")
+        print(f"Question: {ground_truth['question']} | Target: {ground_truth['target']}")
+        print(f"Solution string: {solution_str}")
     try:
         string_in_last_boxed = last_boxed_only_string(solution_str)
         if string_in_last_boxed is not None:
             answer = remove_boxed(string_in_last_boxed)
+            if do_print:
+                print(f"Extracted answer: {answer}")
             if is_equiv(answer, ground_truth["target"]):
                 retval = 1.0
+                if do_print:
+                    print("Correct answer")
+            elif answer:
+                if do_print:
+                    print("Incorrect answer")
+            else:
+                if do_print:
+                    print("No answer found")
+        else:
+            if do_print:
+                print("No answer found")
     except Exception as e:
         print(e)
 
@@ -72,12 +96,16 @@ def remove_boxed(s):
 def last_boxed_only_string(string):
     """Extract the equation from the solution string."""
     # Remove everything before the first "Assistant:"
-    if "Assistant:" in string:
-        string = string.split("Assistant:", 1)[1]
-    elif "<|im_start|>assistant" in string:
+    has_im = False
+    # if "Assistant:" in string:
+    #     string = string.split("Assistant:", 1)[1]
+    #     has_im = True
+    if "<|im_start|>assistant" in string:
         string = string.split("<|im_start|>assistant", 1)[1]
-    # else:
-    #     return None
+        has_im = True
+    if not has_im:
+        return None
+    return string
     return string.split("\n")[-1]
 
     # idx = string.rfind("\\boxed")
