@@ -110,6 +110,7 @@ while true; do
 done
 
 EXPERIMENT_NAME="${dataset}-${model}-${alg}"
+default_local_dir=${PWD}/checkpoints/"${dataset}-${model}-${alg}-${max_prompt_length}-${max_response_length}"
 VLLM_ATTENTION_BACKEND="XFORMERS"
 
 data_dir="${PWD}/data/${dataset}"
@@ -165,6 +166,7 @@ PYTHONPATH=verl:. python -m xft.trainer.main_ppo \
     trainer.save_freq=100 \
     trainer.test_freq=25 \
     trainer.total_training_steps=${total_training_steps} \
+    trainer.default_local_dir=$default_local_dir \
     +data.trainer.total_training_steps_hint=${total_training_steps_with_hint} \
     +data.trainer.uniform_sampling=${hint_sampling_uniform} \
     +data.trainer.stage=False \
