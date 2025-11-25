@@ -14,6 +14,7 @@
 
 import unittest
 
+import numpy as np
 import torch
 import torch.nn as nn
 from tensordict import TensorDict
@@ -129,10 +130,13 @@ class TestDataParallelPPOActor(unittest.TestCase):
             },
             batch_size=[batch_size],
         )
+        non_tensor_dict = {
+            "hint_slice_prop": np.array([0.3] * batch_size, dtype=object),
+        }
 
         meta_info = {"micro_batch_size": batch_size, "temperature": 1.0, "use_dynamic_bsz": False}
 
-        return DataProto(batch=tensor_dict, meta_info=meta_info)
+        return DataProto(batch=tensor_dict, non_tensor_batch=non_tensor_dict, meta_info=meta_info)
 
     def _create_test_data_for_update_policy(self):
         """Create test DataProto for update_policy method"""
@@ -164,10 +168,13 @@ class TestDataParallelPPOActor(unittest.TestCase):
             },
             batch_size=[batch_size],
         )
+        non_tensor_dict = {
+            "hint_slice_prop": np.array([0.3] * batch_size, dtype=object),
+        }
 
         meta_info = {"temperature": 1.0}
 
-        return DataProto(batch=tensor_dict, meta_info=meta_info)
+        return DataProto(batch=tensor_dict, non_tensor_batch=non_tensor_dict, meta_info=meta_info)
 
     def test_compute_log_prob(self):
         """Test compute_log_prob method"""
