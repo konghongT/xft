@@ -193,7 +193,7 @@ class DataParallelPPOActor(BasePPOActor):
                     logits_rmpad = output.logits.squeeze(0)  # (total_nnz, vocab_size)
                     logits_rmpad.div_(temperature)
 
-                    prompt_logits = logits_rmpad[:, :-response_length] if return_prompt_logits else None  # (bsz, prompt_length)
+                    #prompt_logits = logits_rmpad[:, :-response_length] if return_prompt_logits else None  # (bsz, prompt_length)
 
                     # if use_sp: ((total_nnz / sp) + pad) ; if not use_sp: (batch, seqlen)
                     inplace_backward = True
@@ -204,7 +204,24 @@ class DataParallelPPOActor(BasePPOActor):
                         labels=input_ids_rmpad_rolled,
                         inplace_backward=inplace_backward,
                     )
-
+                    
+                    if return_prompt_logits:
+                        if self.use_fused_kernels:
+                            gather_probs = gather_outputs_and_unpad(
+                                logits_rmpad,
+                                gather_dim=0,
+                                unpad_dim=0,
+                                padding_size=pad_size,
+                            )
+                        else:
+                            gather_probs = logits_rmpad
+                        full_logits = pad_input(
+                            hidden_states=gather_probs.unsqueeze(-1),
+                            indices=indices,
+                            batch=batch_size,
+                            seqlen=seqlen,
+                        )
+                        prompt_logits = full_logits.squeeze(-1)[:, :-response_length, :]  # (bsz, prompt_length, vocab_size)
                     # compute entropy
                     if calculate_entropy:
                         if not self.config.entropy_checkpointing:
@@ -273,7 +290,7 @@ class DataParallelPPOActor(BasePPOActor):
                     logits = output.logits
 
                     logits.div_(temperature)
-                    prompt_logits = logits[:, :-response_length] if return_prompt_logits else None  # (bsz, prompt_length)
+                    prompt_logits = logits[:, :-response_length, :] if return_prompt_logits else None  # (bsz, prompt_length)
                     logits = logits[:, -response_length - 1 : -1, :]  # (bsz, response_length, vocab_size)
                     log_probs = logprobs_from_logits(logits, micro_batch["responses"])
                     if calculate_entropy:

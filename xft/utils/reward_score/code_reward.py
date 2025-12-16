@@ -65,7 +65,7 @@ def compute_score(completion, test_cases):
 
     success = False
     import random
-    do_print = random.randint(1, 64) == 1
+    do_print = random.randint(1, 128) == 1
     try:
         res, metadata = check_correctness(in_outs=in_outs, generation=solution, timeout=6, debug=False)
         if do_print:

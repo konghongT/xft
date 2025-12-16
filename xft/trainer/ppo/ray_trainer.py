@@ -525,6 +525,61 @@ class RayPPOTrainer:
             gen_batch.non_tensor_batch.update(batch.non_tensor_batch)
 
         return gen_batch
+    
+    def _log_problem_results(self, scores, reward_models):
+        """Log problem-level results as individual metrics for chart visualization in wandb/swanlab"""
+        
+        # Check if logging is enabled and problem tracking is enabled
+        if not any(logger in self.config.trainer.logger for logger in ['wandb', 'swanlab']):
+            return
+            
+        log_problem_results = getattr(self.config.trainer, 'log_problem_results', True)
+        if not log_problem_results:
+            return
+            
+        from collections import defaultdict
+        
+        # Group scores by question_id
+        problem_stats = defaultdict(list)
+        
+        for i, reward_model in enumerate(reward_models):
+            if isinstance(reward_model, dict) and 'question_id' in reward_model:
+                question_id = reward_model['question_id']
+                score = scores[i]
+                problem_stats[question_id].append(score)
+        
+        # Create metrics for each problem
+        metrics_to_log = {}
+        
+        total_all_scores = 0  # 所有问题的分数总和
+        count_all_scores = 0  # 所有问题的分数数量
+
+        for question_id, question_scores in problem_stats.items():
+            correct_count = sum(1 for score in question_scores if score > 0.5)  # 假设>0.5为正确
+            total_count = len(question_scores)
+            accuracy = correct_count / total_count if total_count > 0 else 0
+
+            total_all_scores += sum(question_scores)
+            count_all_scores += total_count
+            
+            # Log as individual metrics for chart visualization
+            # 这样可以在wandb/swanlab中创建图表，横坐标为问题ID，纵坐标为正确数量
+            metrics_to_log[f'val/problem_correct_count/{question_id}'] = correct_count
+            #metrics_to_log[f'val/problem_total_count/{question_id}'] = total_count
+            #metrics_to_log[f'val/problem_accuracy/{question_id}'] = accuracy
+
+        average_score = total_all_scores / count_all_scores if count_all_scores > 0 else 0
+
+        metrics_to_log['val/average_score_all_problems'] = average_score
+        
+        # Log metrics to enabled loggers
+        if metrics_to_log:
+            if 'wandb' in self.config.trainer.logger:
+                import wandb
+                wandb.log(metrics_to_log, step=self.global_steps)
+            if 'swanlab' in self.config.trainer.logger:
+                import swanlab
+                swanlab.log(metrics_to_log, step=self.global_steps)
 
     def _validate(self):
         data_source_lst = []
@@ -537,6 +592,7 @@ class RayPPOTrainer:
         sample_scores = []
         sample_turns = []
         sample_uids = []
+        reward_models = []
 
         for test_data in self.val_dataloader:
             test_batch = DataProto.from_single_dict(test_data)
@@ -559,6 +615,13 @@ class RayPPOTrainer:
             input_ids = test_batch.batch["input_ids"]
             # TODO: Can we keep special tokens except for padding tokens?
             input_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in input_ids]
+
+            _reward_models = []
+            for rm in test_batch.non_tensor_batch['reward_model'].tolist():
+                rm["ground_truth"] = rm["ground_truth"].tolist() if isinstance(rm["ground_truth"], np.ndarray) else rm["ground_truth"]
+                _reward_models.append(rm)
+            reward_models.extend(_reward_models)
+
             sample_inputs.extend(input_texts)
             sample_uids.extend(test_batch.non_tensor_batch["uid"])
 
@@ -623,6 +686,8 @@ class RayPPOTrainer:
             data_source_lst.append(test_batch.non_tensor_batch.get("data_source", ["unknown"] * reward_tensor.shape[0]))
 
         self._maybe_log_val_generations(inputs=sample_inputs, outputs=sample_outputs, scores=sample_scores)
+
+        self._log_problem_results(scores=sample_scores, reward_models=reward_models)
 
         # dump generations
         val_data_dir = self.config.trainer.get("validation_data_dir", None)

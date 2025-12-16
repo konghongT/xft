@@ -394,6 +394,8 @@ class RLHFDataset(Dataset):
                         slice_length = num - current_timestep // (self.config.trainer.total_training_steps_hint // (num + 1))
                         slice_length = np.clip(slice_length, 0, num)
                         slice_length = separation[slice_length]
+                elif self.config.trainer.only_rl:
+                    slice_length = 0
                 else:
                     if self.timestep > self.config.trainer.total_training_steps_hint:
                         slice_length = 0

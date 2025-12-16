@@ -18,9 +18,13 @@ def reward_func(data_source, solution_str, ground_truth, extra_info=None):
         from xft.utils.reward_score import math_reward
 
         return math_reward.compute_score(solution_str, ground_truth)
-    elif data_source in ["livecodebench/code_generation_lite", "livecodebench/code_generation","code"]:
+    elif data_source in ["livecodebench/code_generation_lite", "livecodebench/code_generation","code","primeintellect","taco"]:
         from xft.utils.reward_score import code_reward
 
         return code_reward.compute_score(solution_str, ground_truth)
+    elif data_source in ["livecodebench","test-code-livecodebench-hard","test-code-livecodebench-easy"]:
+        from xft.utils.reward_score.livecodebench import compute_score
+
+        return compute_score(solution_str, ground_truth)
     else:
         raise NotImplementedError
