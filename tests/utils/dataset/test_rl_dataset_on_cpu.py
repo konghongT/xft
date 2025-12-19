@@ -20,8 +20,8 @@ from torch.utils.data import DataLoader
 
 def get_gsm8k_data():
     # prepare test dataset
-    local_folder = os.path.expanduser("~/data/math")
-    local_path = os.path.join(local_folder, "train.parquet")
+    local_folder = os.path.expanduser("/root/xft/data/livecodebench")
+    local_path = os.path.join(local_folder, "test.parquet")
     os.makedirs(local_folder, exist_ok=True)
     return local_path
 
@@ -30,11 +30,12 @@ def test_rl_dataset():
     from verl.utils import hf_tokenizer
     from xft.utils.dataset.rl_dataset import RLHFDataset, collate_fn
 
-    tokenizer = hf_tokenizer("Qwen/Qwen2.5-Math-1.5B")
+    tokenizer = hf_tokenizer("deepseek-ai/DeepSeek-R1-Distill-Qwen-7B")
     local_path = get_gsm8k_data()
     config = OmegaConf.create(
         {
             "prompt_key": "prompt",
+            "split_prompt": False,
             "max_prompt_length": 2048,
             "filter_overlong_prompts": True,
             "filter_overlong_prompts_workers": 2,
@@ -69,4 +70,48 @@ def test_rl_dataset():
     for key, val in dataset[0].items():
         print(f"dataset: {key}={val}")
 
+
+def test_rl_dataset1():
+    from verl.utils import hf_tokenizer
+    from xft.utils.dataset.rl_dataset import RLHFDataset, collate_fn
+
+    tokenizer = hf_tokenizer("deepseek-ai/DeepSeek-R1-Distill-Qwen-7B")
+    local_path = get_gsm8k_data()
+    config = OmegaConf.create(
+        {
+            "prompt_key": "prompt",
+            "split_prompt": False,
+            "max_prompt_length": 2048,
+            "filter_overlong_prompts": True,
+            "filter_overlong_prompts_workers": 2,
+            "trainer": {"uniform_sampling": True},
+        }
+    )
+    dataset = RLHFDataset(data_files=local_path, tokenizer=tokenizer, config=config)
+
+    dataloader = DataLoader(dataset=dataset, batch_size=16, shuffle=True, drop_last=True, collate_fn=collate_fn)
+
+    a = next(iter(dataloader))
+
+    from verl import DataProto
+
+    tensors = {}
+    non_tensors = {}
+
+    for key, val in a.items():
+        if isinstance(val, torch.Tensor):
+            tensors[key] = val
+        else:
+            non_tensors[key] = val
+
+    data_proto = DataProto.from_dict(tensors=tensors, non_tensors=non_tensors)
+    assert "input_ids" in data_proto.batch
+
+    data = dataset[0]["input_ids"]
+    output = tokenizer.batch_decode([data])[0]
+    print(f"type: type{output}")
+    print(f"\n\noutput: {output}")
+    torch.set_printoptions(threshold=torch.inf)
+    for key, val in dataset[0].items():
+        print(f"dataset: {key}={val}")
 
