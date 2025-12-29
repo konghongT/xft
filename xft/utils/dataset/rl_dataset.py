@@ -25,6 +25,7 @@ from typing import Optional
 import datasets
 import numpy as np
 import torch
+import pandas as pd
 from omegaconf import DictConfig, ListConfig
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer, ProcessorMixin
@@ -118,7 +119,7 @@ class RLHFDataset(Dataset):
         self.num_workers = config.get("filter_overlong_prompts_workers", max(1, os.cpu_count() // 4))
         self.num_workers = min(self.num_workers, os.cpu_count())
         self.use_shm = config.get("use_shm", False)
-        self.split_prompt = config.get("split_prompt", True)
+        self.split_prompt = config.get("split_prompt", False)
         self.is_eval = is_eval
         self.timestep = 1 # start from 1
         self.chat_template_func = config.get("chat_template_func", None)
@@ -143,13 +144,19 @@ class RLHFDataset(Dataset):
         dataframes = []
         for parquet_file in self.data_files:
             # read parquet files and cache
-            dataframe = datasets.load_dataset("parquet", data_files=parquet_file)["train"]
-            dataframes.append(dataframe)
+            # support pkl files
+            if parquet_file.endswith(".pkl"):
+                dataframe = pd.read_pickle(parquet_file)
+                if not isinstance(dataframe, pd.core.frame.DataFrame):
+                    dataframe = pd.DataFrame(dataframe)
+                dataframe = Dataset.from_pandas(dataframe)  
+            else:
+                dataframe = datasets.load_dataset("parquet", data_files=parquet_file)["train"]
         self.dataframe: datasets.Dataset = datasets.concatenate_datasets(dataframes)
 
         total = len(self.dataframe)
-        print(f"dataset len: {len(self.dataframe)}")
-
+        # print(f"dataset len: {len(self.dataframe)}")
+        # print(f"[split_prompt]: ---------------------------------{self.split_prompt}")
         if self.split_prompt:
             user_key = "User: "
             assistant_key = "Assistant: "
@@ -299,6 +306,7 @@ class RLHFDataset(Dataset):
         Note that we also return the raw_input_ids so that it can be combined with other chat template
         """
         row_dict: dict = self.dataframe[item]
+
         messages = self._build_messages(row_dict)
         model_inputs = {}
 

@@ -44,6 +44,7 @@ from verl.trainer.config import AlgoConfig
 from verl.trainer.ppo import core_algos
 from verl.trainer.ppo.core_algos import AdvantageEstimator, agg_loss
 from verl.trainer.ppo.metric_utils import (
+    _compute_response_info,
     compute_data_metrics,
     compute_throughout_metrics,
     compute_timing_metrics,
@@ -594,6 +595,8 @@ class RayPPOTrainer:
         sample_uids = []
         reward_models = []
 
+        response_infos = []
+
         for test_data in self.val_dataloader:
             test_batch = DataProto.from_single_dict(test_data)
 
@@ -685,6 +688,9 @@ class RayPPOTrainer:
 
             data_source_lst.append(test_batch.non_tensor_batch.get("data_source", ["unknown"] * reward_tensor.shape[0]))
 
+            response_infos.append(_compute_response_info(test_batch))
+
+
         self._maybe_log_val_generations(inputs=sample_inputs, outputs=sample_outputs, scores=sample_scores)
 
         self._log_problem_results(scores=sample_scores, reward_models=reward_models)
@@ -729,6 +735,15 @@ class RayPPOTrainer:
             metric_dict["val-aux/num_turns/min"] = sample_turns.min()
             metric_dict["val-aux/num_turns/max"] = sample_turns.max()
             metric_dict["val-aux/num_turns/mean"] = sample_turns.mean()
+        if response_infos:
+            response_length = torch.cat([ri["response_length"] for ri in response_infos])
+            metric_dict["val-aux/response_length/mean"] = torch.mean(response_length).item()
+            metric_dict["val-aux/response_length/max"] = torch.max(response_length).item()
+            metric_dict["val-aux/response_length/min"] = torch.min(response_length).item()
+            prompt_length = torch.cat([ri["prompt_length"] for ri in response_infos])
+            metric_dict["val-aux/prompt_length/mean"] = torch.mean(prompt_length).item()
+            metric_dict["val-aux/prompt_length/max"] = torch.max(prompt_length).item()
+            metric_dict["val-aux/prompt_length/min"] = torch.min(prompt_length).item()
 
         return metric_dict
 

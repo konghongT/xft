@@ -26,6 +26,13 @@ import subprocess
 from contextlib import contextmanager
 import signal
 import ast
+import sys
+#import xft
+#import xft.utils
+#import xft.utils.reward_score
+#import xft.utils.reward_score.livecodebench
+#import xft.utils.reward_score.livecodebench.lcb_runner.benchmarks.code_generation as cg
+
 
 IMPORT_PROMPT='''from typing import *
 
@@ -42,6 +49,19 @@ import datetime
 inf = float('inf')
 
 '''
+
+#sys.modules.setdefault(
+#    "verl.utils.reward_score.livecodebench.lcb_runner.benchmarks.code_generation",
+#    cg,
+#)
+#sys.modules.setdefault("verl", xft)
+#sys.modules.setdefault("verl.utils", xft.utils)
+#sys.modules.setdefault("verl.utils.reward_score", xft.utils.reward_score)
+#sys.modules.setdefault(
+#    "verl.utils.reward_score.livecodebench",
+#    xft.utils.reward_score.livecodebench,
+#)
+
 
 livecodebench_dir = os.environ.get("LIVECODEBENCH_DATA_PATH", None)
 if livecodebench_dir is None:
@@ -129,7 +149,7 @@ def math_verify_reward_function(solution_str, ground_truth):
     # Very unlikely to be correct after the above matches
     return 0.0
 
-def compute_score(completion, test_cases, task=None, timeout=6, is_long_penalty=False, is_binary_reward=True, is_power4_reward=False):
+def compute_score_impl(completion, test_cases, task=None, timeout=6, is_long_penalty=False, is_binary_reward=True, is_power4_reward=False):
     # try to get code solution from completion. if the completion is pure code, this will not take effect.
     # solution = completion.split('```python')[-1].split('```')[0]
 
@@ -146,7 +166,10 @@ def compute_score(completion, test_cases, task=None, timeout=6, is_long_penalty=
     
     if "question_id" in test_cases:
         try:
-            benchmark = pickle.load(open(os.path.join(livecodebench_dir, "{}.pkl".format(test_cases["question_id"])), "rb"))
+            # benchmark = pickle.load(open(os.path.join(livecodebench_dir, "{}.pkl".format(test_cases["question_id"])), "rb"))
+            with open(os.path.join(livecodebench_dir, "{}.json".format(test_cases["question_id"])), "r") as f:
+                benchmark = json.loads(f.read())
+                benchmark = CodeGenerationProblem(**benchmark)
             custom_output = test_cases.copy()
             custom_output["output_list"] = [solution_str]
             return lcb_compute_score([custom_output], [benchmark]), None
@@ -327,3 +350,6 @@ def compute_score(completion, test_cases, task=None, timeout=6, is_long_penalty=
             traceback.print_exc(10)
             return False, None
 
+def compute_score(completion, test_cases, task=None, timeout=6, is_long_penalty=False, is_binary_reward=True, is_power4_reward=False):
+    score, _ = compute_score_impl(completion, test_cases, task=task, timeout=timeout, is_long_penalty=is_long_penalty, is_binary_reward=is_binary_reward, is_power4_reward=is_power4_reward)
+    return score
